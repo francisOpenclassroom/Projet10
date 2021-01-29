@@ -1,0 +1,386 @@
+# TODO: aws cloudformation deploy --template-file wordpress_docker_RDS.yaml --stack-name Wordpress --capabilities CAPABILITY_NAMED_IAM --parameter-overrides KeyName=tp-terraform DBName=wordpress  MasterUserName=wordpress MasterPassword=password
+# TODO: Docker compose et execution du conteneur
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+
+Parameters:
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the bastion host
+    Type: 'AWS::EC2::KeyPair::KeyName'
+    ConstraintDescription: Keypair
+
+  DBName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the bastion host
+    Type: String
+    ConstraintDescription: DBName
+
+  SSHLocation:
+    Description: >-
+    Type: String
+    MinLength: '9'
+    MaxLength: '18'
+    Default: 0.0.0.0/0
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
+    ConstraintDescription: must be a valid CIDR range of the form x.x.x.x/x.
+
+  MasterUserName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the bastion host
+    Type: String
+    ConstraintDescription: DBUserName
+
+  MasterPassword:
+    Description: >-
+    Type: String
+
+
+
+Resources:
+  VPC:
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      EnableDnsSupport: 'true'
+      EnableDnsHostnames: 'true'
+      CidrBlock: 10.0.0.0/16
+      Tags:
+        - Key: Application
+          Value: !Ref 'AWS::StackName'
+        - Key: Network
+          Value: Public
+
+  PublicSubnetA:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.0.0/24
+      AvailabilityZone: eu-west-3a
+      Tags:
+        - Key: Name
+          Value: "Public Subnet A"
+
+  PrivateSubnetA:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.100.0/24
+      AvailabilityZone: eu-west-3a
+      Tags:
+        - Key: Name
+          Value: "Subnet prive A"
+
+  PrivateSubnetB:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.200.0/24
+      AvailabilityZone: eu-west-3b
+      Tags:
+        - Key: Name
+          Value: "Subnet prive B"
+
+
+
+
+
+  InternetGateway:
+    Type: 'AWS::EC2::InternetGateway'
+    Properties:
+      Tags:
+        - Key: Application
+          Value: !Ref 'AWS::StackName'
+        - Key: Network
+          Value: Public
+
+  GatewayToInternet:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicRouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: "Route publique"
+
+  PublicRoute:
+    Type: 'AWS::EC2::Route'
+    DependsOn: GatewayToInternet
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PublicSubnetA
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicNetworkAcl:
+    Type: 'AWS::EC2::NetworkAcl'
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: "ACL Publique"
+
+  InboundHTTPPublicNetworkAclEntry:
+    Type: 'AWS::EC2::NetworkAclEntry'
+    Properties:
+      NetworkAclId: !Ref PublicNetworkAcl
+      RuleNumber: '100'
+      Protocol: '6'
+      RuleAction: allow
+      Egress: 'false'
+      CidrBlock: 0.0.0.0/0
+      PortRange:
+        From: '80'
+        To: '80'
+
+  InboundHTTPSPublicNetworkAclEntry:
+    Type: 'AWS::EC2::NetworkAclEntry'
+    Properties:
+      NetworkAclId: !Ref PublicNetworkAcl
+      RuleNumber: '101'
+      Protocol: '6'
+      RuleAction: allow
+      Egress: 'false'
+      CidrBlock: 0.0.0.0/0
+      PortRange:
+        From: '3306'
+        To: '3306'
+
+  InboundSSHPublicNetworkAclEntry:
+    Type: 'AWS::EC2::NetworkAclEntry'
+    Properties:
+      NetworkAclId: !Ref PublicNetworkAcl
+      RuleNumber: '102'
+      Protocol: '6'
+      RuleAction: allow
+      Egress: 'false'
+      CidrBlock: !Ref SSHLocation
+      PortRange:
+        From: '22'
+        To: '22'
+
+  InboundEphemeralPublicNetworkAclEntry:
+    Type: 'AWS::EC2::NetworkAclEntry'
+    Properties:
+      NetworkAclId: !Ref PublicNetworkAcl
+      RuleNumber: '103'
+      Protocol: '6'
+      RuleAction: allow
+      Egress: 'false'
+      CidrBlock: 0.0.0.0/0
+      PortRange:
+        From: '1024'
+        To: '65535'
+
+  OutboundPublicNetworkAclEntry:
+    Type: 'AWS::EC2::NetworkAclEntry'
+    Properties:
+      NetworkAclId: !Ref PublicNetworkAcl
+      RuleNumber: '100'
+      Protocol: '6'
+      RuleAction: allow
+      Egress: 'true'
+      CidrBlock: 0.0.0.0/0
+      PortRange:
+        From: '0'
+        To: '65535'
+
+  PublicSubnetNetworkAclAssociation:
+    Type: 'AWS::EC2::SubnetNetworkAclAssociation'
+    Properties:
+      SubnetId: !Ref PublicSubnetA
+      NetworkAclId: !Ref PublicNetworkAcl
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:  [FullAccessS3]
+
+  EC2Host:
+    Type: 'AWS::EC2::Instance'
+
+    DependsOn: GatewayToInternet
+    Properties:
+#      UserData: !Base64
+#        'Fn::Join':
+#          - ''
+#          - - |
+#              !/bin/bash -xe
+#            - |
+#              yum update -y aws-cfn-bootstrap
+#              aws s3 cp s3://projet10/wp-config.php /home/ec2-user/wp-config.php
+#              amazon-linux-extras install epel
+#              amazon-linux-extras install docker
+#              service docker start
+#              systemctl enable docker
+#              usermod -a -G docker ec2-user
+#              yum -y update
+#              yum -y install fuse fuse-libs
+#              yum -y install python-pip
+#              pip install yas3fs
+#              sed -i'' 's/^# *user_allow_other/user_allow_other/' /etc/fuse.conf
+#              mkdir /home/ec2-user/local-mnt
+#              yas3fs s3://projet10 /home/ec2-user/local-mnt
+#            - 'echo -e "DB_NAME="'
+#            - !Ref 'DBName'
+#            - '"\n"'
+#            - '"DB_PASSWORD="'
+#            - !Ref 'MasterPassword'
+#            - '"\n"'
+#            - '"DB_USERNAME="'
+#            - !Ref 'MasterUserName'
+#            - '"\n"'
+#            - '"DB_HOST="'
+#            - !GetAtt
+#              - DatabaseInstance
+#              - Endpoint.Address
+#            - '> /home/ec2-user/.env'
+#            - |+
+#
+#            - 'cat /home/ec2-user/.env > /home/ec2-user/test.txt'
+#            - |+
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          echo "DB_NAME=${DBName}" >> /home/ec2-user/.env
+          echo "DB_HOST=${DatabaseInstance.Endpoint.Address}" >> /home/ec2-user/.env
+          echo "DB_USER=${MasterUserName}" >> /home/ec2-user/.env
+          echo "DB_PASSWORD=${MasterPassword}" >> /home/ec2-user/.env
+          aws s3 cp s3://projet10/docker-compose.yml /home/ec2-user/docker-compose.yml
+          aws s3 cp s3://projet10/docker-run /home/ec2-user/docker-run
+          sudo yum -y update
+          sudo amazon-linux-extras install epel
+          sudo amazon-linux-extras install docker
+          sudo service docker start
+          sudo systemctl enable docker
+          sudo usermod -a -G docker ec2-user
+          sudo yum -y install fuse fuse-libs
+          sudo yum -y install python-pip
+          sudo pip install yas3fs
+          sudo sed -i'' 's/^# *user_allow_other/user_allow_other/' /etc/fuse.conf
+          mkdir /home/ec2-user/local-mnt
+          sudo yum groupinstall -y "Development Tools"
+          sudo pip install docker-compose
+          yas3fs s3://projet10 /home/ec2-user/local-mnt
+          sh /home/ec2-user/docker-run
+
+
+      #          sudo yum -y update
+#          sudo amazon-linux-extras install epel
+#          sudo amazon-linux-extras install docker
+#          sudo service docker start
+#          sudo systemctl enable docker
+#          sudo usermod -a -G docker ec2-user
+#          sudo yum -y install fuse fuse-libs
+#          sudo yum -y install python-pip
+#          sudo pip install yas3fs
+#          sudo sed -i'' 's/^# *user_allow_other/user_allow_other/' /etc/fuse.conf
+#          mkdir /home/ec2-user/local-mnt
+    #          yas3fs s3://projet10 /home/ec2-user/local-mnt
+#          docker run -dp 80:80 --name wordpress -w /var/www/html/ -v /home/ec2-user/local-mnt:/var/www/html/wp-content wordpress:latest
+
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      ImageId: ami-00798d7180f25aac2
+      IamInstanceProfile: !Ref InstanceProfile
+      AvailabilityZone: eu-west-3a
+
+      NetworkInterfaces:
+        - GroupSet:
+            - !Ref EC2SecurityGroup
+          AssociatePublicIpAddress: 'true'
+          DeviceIndex: '0'
+          DeleteOnTermination: 'true'
+          SubnetId: !Ref PublicSubnetA
+
+
+  EC2SecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Enable access to the EC2 host
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: !Ref SSHLocation
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: 0.0.0.0/0
+
+  DBEC2SecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Open database for access
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '3306'
+          ToPort: '3306'
+          SourceSecurityGroupId: !Ref EC2SecurityGroup
+      VpcId: !Ref VPC
+
+  myDBSubnetGroup:
+    Properties:
+      DBSubnetGroupDescription: description
+      SubnetIds:
+        - !Ref PrivateSubnetA
+        - !Ref PrivateSubnetB
+      Tags:
+        - Key: String
+          Value: String
+    Type: "AWS::RDS::DBSubnetGroup"
+
+  DatabaseInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBName: !Ref DBName
+      Engine: MySQL
+      MasterUsername: !Ref MasterUserName
+      MasterUserPassword: !Ref MasterPassword
+      DBInstanceClass: db.t2.micro
+      AllocatedStorage: '5'
+      AvailabilityZone: eu-west-3a
+      DBSubnetGroupName: !Ref myDBSubnetGroup
+      VPCSecurityGroups:
+        - !GetAtt
+          - DBEC2SecurityGroup
+          - GroupId
+
+
+
+
+Outputs:
+
+  VPC:
+    Description: VPC
+    Value: !Ref VPC
+    Export:
+      Name: !Sub ${AWS::StackName}-VPC
+
+  PublicSubnetA:
+    Description: Subnet Public 1 AZ A
+    Value: !Ref PublicSubnetA
+    Export:
+      Name: !Sub ${AWS::StackName}-PublicSubnetA
+
+  PrivateSubnetC:
+    Description: Subnet Prive  AZ A
+    Value: !Ref PrivateSubnetA
+    Export:
+      Name: !Sub ${AWS::StackName}-PrivateSubnetA
+
+  Endpoint:
+    Description: PSQL Command Line
+    Value: !Join
+      - ''
+      - - !GetAtt 'DatabaseInstance.Endpoint.Address'
+
+    Export:
+      Name: !Sub ${AWS::StackName}-Endpoint
