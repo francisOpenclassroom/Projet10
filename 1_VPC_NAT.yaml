@@ -1,0 +1,363 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: >-
+
+Parameters:
+
+  ReseauDMZ:
+    Description: 'Plage autorisée dans la DMZ'
+    Type: String
+    MinLength: '9'
+    MaxLength: '18'
+    Default: 0.0.0.0/0
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
+    ConstraintDescription:  x.x.x.x/x.
+
+  VPNAddress:
+    Type: String
+    Description: IP Address of your VPN device
+    MinLength: '7'
+    MaxLength: '15'
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})'
+    ConstraintDescription: must be a valid IP address of the form x.x.x.x
+
+Resources:
+  # VPC
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: MainVPC
+
+# Subnets
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.1.0/24
+      VpcId: !Ref VPC
+      AvailabilityZone: eu-west-3a
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Public-A
+
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.2.0/24
+      VpcId: !Ref VPC
+      AvailabilityZone: eu-west-3b
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Public-B
+
+  PublicSubnetC:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.3.0/24
+      VpcId: !Ref VPC
+      AvailabilityZone: eu-west-3c
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Public-B
+
+  PrivateSubnetC:
+    Type: AWS::EC2::Subnet
+    Properties:
+      CidrBlock: 10.0.100.0/24
+      VpcId: !Ref VPC
+      AvailabilityZone: eu-west-3c
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-Private-C
+
+# -------- Passerelles -------- #
+
+# Passerelle Internet
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    DependsOn: VPC
+
+# Attachement de IGW
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+# Passerelle VPN
+  VPNGateway:
+    Type: 'AWS::EC2::VPNGateway'
+    Properties:
+      Type: ipsec.1
+      Tags:
+        - Key: Application
+          Value: !Ref 'AWS::StackName'
+
+  VPNGatewayAttachment:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    Properties:
+      VpcId: !Ref VPC
+      VpnGatewayId: !Ref VPNGateway
+
+  CustomerGateway:
+    Type: 'AWS::EC2::CustomerGateway'
+    Properties:
+      Type: ipsec.1
+      BgpAsn: '65000'
+      IpAddress: !Ref VPNAddress
+      Tags:
+        - Key: Application
+          Value: !Ref 'AWS::StackName'
+        - Key: VPN
+          Value: !Join
+            - ''
+            - - 'Gateway to '
+              - !Ref VPNAddress
+
+  VPNConnection:
+    Type: 'AWS::EC2::VPNConnection'
+    Properties:
+      Type: ipsec.1
+      StaticRoutesOnly: 'true'
+      CustomerGatewayId: !Ref CustomerGateway
+      VpnGatewayId: !Ref VPNGateway
+
+  VPNConnectionRoute:
+    Type: 'AWS::EC2::VPNConnectionRoute'
+    Properties:
+      VpnConnectionId: !Ref VPNConnection
+      DestinationCidrBlock: 192.168.100.0/24
+
+
+  NATInstance:
+    Type: AWS::EC2::Instance
+    DependsOn: PublicRoute
+    Properties:
+      ImageId: ami-00798d7180f25aac2
+      InstanceType: t2.micro
+      NetworkInterfaces:
+        - DeviceIndex: '0'
+          SubnetId: !Ref PublicSubnetC
+          AssociatePublicIpAddress: true                # Association d'une adresse publique
+          GroupSet: [ !Ref NATSecurityGroup ]           # Groupe de sécurité NAT
+      SourceDestCheck: false  # Permet d'utiliser la fonction NAT dans une instance
+      Tags:
+        - Key: Name
+          Value: !Sub NAT-${AWS::StackName}
+      UserData: #  Installation de la fonction routeur dans l'instance Linux
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum -y update
+          yum install -y aws-cfn-bootstrap
+          echo 1 > /proc/sys/net/ipv4/ip_forward
+          echo 0 > /proc/sys/net/ipv4/conf/eth0/send_redirects
+          /sbin/iptables -t nat -A POSTROUTING -o eth0 -s 0.0.0.0/0 -j MASQUERADE
+          /sbin/iptables-save > /etc/sysconfig/iptables
+          mkdir -p /etc/sysctl.d/
+          cat << NatConfFileMarker > /etc/sysctl.d/nat.conf
+          net.ipv4.ip_forward = 1
+          net.ipv4.conf.eth0.send_redirects = 0
+          NatConfFileMarker
+          /opt/aws/bin/cfn-signal -e 0 --resource NATInstance --stack ${AWS::StackName} --region ${AWS::Region}
+    # L'installation est complete après la réception d'un signal dans un délai de 5 minutes, la ligne ci-dessus retourne le signal souhaité
+    CreationPolicy:
+      ResourceSignal:
+        Count: 1
+        Timeout: PT5M
+
+
+
+# -------- Routage -------- #
+
+# table de routage publique
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: Public
+
+# route publique
+  PublicRoute: # Route vers la passerelle internet:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetCRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetC
+      RouteTableId: !Ref PublicRouteTable
+
+
+
+
+# Table de routage prive
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: Private
+
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      InstanceId: !Ref NATInstance
+
+# Route avant installation de l'instance
+  PrivatetCInternetSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetC
+      RouteTableId: !Ref PrivateRouteTable
+
+
+
+
+# -------- Groupes de sécurité -------- #
+
+  NATSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    DependsOn: AttachGateway
+    Properties:
+      GroupName: !Sub NATSecurityGroup-${AWS::StackName}
+      GroupDescription: Autorise le flux en provenance du reseau interne
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '0'
+          ToPort: '1024'
+          CidrIp: !GetAtt VPC.CidrBlock
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: '0'
+          ToPort: '65535'
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: udp
+          FromPort: '0'
+          ToPort: '65535'
+          CidrIp: 0.0.0.0/0
+
+  DMZSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: "SSH - HTTP - HTTPS"
+      GroupDescription: DMZ Security Group to allow Access to SSH
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - Description: SSH
+          IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: !Ref ReseauDMZ
+        - Description: Http
+          IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: !Ref ReseauDMZ
+
+
+
+
+
+
+
+
+
+
+
+Outputs:
+
+  VPC:
+    Description: VPC
+    Value: !Ref VPC
+    Export:
+      Name: !Sub ${AWS::StackName}-VPC
+
+  PublicSubnetA:
+    Description: Subnet Public 1 AZ A
+    Value: !Ref PublicSubnetA
+    Export:
+      Name: !Sub ${AWS::StackName}-PublicSubnetA
+
+  PublicSubnetB:
+    Description: Subnet Public 2 AZ B
+    Value: !Ref PublicSubnetB
+    Export:
+      Name: !Sub ${AWS::StackName}-PublicSubnetB
+
+  PublicSubnetC:
+    Description: Subnet Public  AZ C
+    Value: !Ref PublicSubnetB
+    Export:
+      Name: !Sub ${AWS::StackName}-PublicSubnetC
+
+  PrivateSubnetC:
+    Description: Subnet Prive  AZ C
+    Value: !Ref PrivateSubnetC
+    Export:
+      Name: !Sub ${AWS::StackName}-PrivateSubnetC
+
+  InternetGateway:
+    Description: IGW
+    Value: !Ref InternetGateway
+    Export:
+      Name: !Sub ${AWS::StackName}-InternetGateway
+
+  VPNGateway:
+    Description: VPNGW
+    Value: !Ref VPNGateway
+    Export:
+      Name: !Sub ${AWS::StackName}-VPNGateway
+
+  CustomerGateway:
+    Description: CGW
+    Value: !Ref CustomerGateway
+    Export:
+      Name: !Sub ${AWS::StackName}-CGateway
+
+  VPNConnection:
+    Description: VPN Connection
+    Value: !Ref VPNConnection
+    Export:
+      Name: !Sub ${AWS::StackName}-VPNConnection
+
+  VPNConnectionRoute:
+    Description: CVPNConnectionRoute
+    Value: !Ref VPNConnectionRoute
+    Export:
+      Name: !Sub ${AWS::StackName}-VPNConnectionRoute
+
+  PublicRoutetable:
+    Description: Public Internet
+    Value: !Ref PublicRouteTable
+    Export:
+      Name: !Sub ${AWS::StackName}-PublicRouteTable
+
+  PublicRoute:
+    Description: Route vers internet GW
+    Value: !Ref PublicRoute
+    Export:
+      Name: !Sub ${AWS::StackName}-PublicRoute
+
+  DMZSg:
+    Description: Groupe de sécurité Instance privee
+    Value: !Ref DMZSecurityGroup
+    Export:
+      Name: !Sub ${AWS::StackName}-DMZSg
+
+
+
+

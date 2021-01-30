@@ -1,0 +1,178 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: >-
+
+Parameters:
+
+  OperatorEMail:
+    Description: EMail address to notify if there are any scaling operations
+    Type: String
+    AllowedPattern: >-
+      ([a-zA-Z0-9_\-\.]+)@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.)|(([a-zA-Z0-9\-]+\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\]?)
+    ConstraintDescription: must be a valid email address.
+
+  NetworkStackName:
+    Description: >-
+      Nom de la stack reseau
+    Type: String
+    MinLength: 1
+    MaxLength: 255
+    AllowedPattern: '^[a-zA-Z][-a-zA-Z0-9]*$'
+    Default: network
+
+  SGStackName:
+    Description: >-
+      Nom de la stack reseau
+    Type: String
+    MinLength: 1
+    MaxLength: 255
+    AllowedPattern: '^[a-zA-Z][-a-zA-Z0-9]*$'
+    Default: SG
+
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instances
+    Type: 'AWS::EC2::KeyPair::KeyName'
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+
+Resources:
+
+  NotificationTopic:
+    Type: 'AWS::SNS::Topic'
+    Properties:
+      Subscription:
+        - Endpoint: !Ref OperatorEMail
+          Protocol: email
+
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancing::LoadBalancer
+    Properties:
+      Subnets:
+        - !ImportValue
+          'Fn::Sub': '${NetworkStackName}-PublicSubnetA'
+        - !ImportValue
+          'Fn::Sub': '${NetworkStackName}-PublicSubnetB'
+      CrossZone: 'true'
+      Listeners:
+        - LoadBalancerPort: '80'
+          InstancePort: '80'
+          Protocol: HTTP
+      HealthCheck:
+        Target: HTTP:80/
+        HealthyThreshold: '3'
+        UnhealthyThreshold: '5'
+        Interval: '30'
+        Timeout: '5'
+      SecurityGroups:
+        - !ImportValue
+          'Fn::Sub': '${SGStackName}-ELBWS-SG'
+
+  AsgLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub ${AWS::StackName}-launch-template
+      LaunchTemplateData:
+        CreditSpecification:
+          CpuCredits: Unlimited
+        ImageId: ami-00798d7180f25aac2
+        InstanceType: t2.micro
+        KeyName: !Ref KeyName
+        Monitoring:
+          Enabled: True
+        SecurityGroupIds:
+          - !ImportValue
+            'Fn::Sub': '${SGStackName}-WS-SG'
+        UserData:
+          Fn::Base64: |
+            #!/bin/bash -xe
+
+            yum update -y
+            yum install -y httpd
+            echo "Le nom de l'instance est  : $(hostname -f)" sur la zone $(AvailabilityZone)> /var/www/html/index.html
+            systemctl start httpd
+
+  ApplicationAsg:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: ApplicationAsg
+      MinSize: '1'
+      MaxSize: '5'
+      DesiredCapacity: '2'
+      HealthCheckGracePeriod: 300
+      LaunchTemplate:
+        LaunchTemplateId: !Ref AsgLaunchTemplate
+        Version: !GetAtt AsgLaunchTemplate.LatestVersionNumber
+      VPCZoneIdentifier:
+        - !ImportValue
+          'Fn::Sub': '${NetworkStackName}-PrivateSubnetA'
+        - !ImportValue
+          'Fn::Sub': '${NetworkStackName}-PrivateSubnetB'
+      LoadBalancerNames:
+        - !Ref LoadBalancer
+      NotificationConfiguration:
+        TopicARN: !Ref NotificationTopic
+        NotificationTypes:
+          - 'autoscaling:EC2_INSTANCE_LAUNCH'
+          - 'autoscaling:EC2_INSTANCE_LAUNCH_ERROR'
+          - 'autoscaling:EC2_INSTANCE_TERMINATE'
+          - 'autoscaling:EC2_INSTANCE_TERMINATE_ERROR'
+
+  WebServerScaleUpPolicy:
+    Type: 'AWS::AutoScaling::ScalingPolicy'
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref ApplicationAsg
+      Cooldown: '60'
+      ScalingAdjustment: '1'
+
+  WebServerScaleDownPolicy:
+    Type: 'AWS::AutoScaling::ScalingPolicy'
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref ApplicationAsg
+      Cooldown: '60'
+      ScalingAdjustment: '-1'
+
+  CPUAlarmHigh:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmDescription: Scale-up if CPU > 80% for 5 minutes
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: '300'
+      EvaluationPeriods: '1'
+      Threshold: '80'
+      AlarmActions:
+        - !Ref WebServerScaleUpPolicy
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref ApplicationAsg
+      ComparisonOperator: GreaterThanThreshold
+
+  CPUAlarmLow:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmDescription: Scale-down if CPU < 70% for 5 minutes
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: '300'
+      EvaluationPeriods: '1'
+      Threshold: '70'
+      AlarmActions:
+        - !Ref WebServerScaleDownPolicy
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref ApplicationAsg
+      ComparisonOperator: LessThanThreshold
+
+Outputs:
+
+  WebsiteURL:
+    Value: !Join
+      - ''
+      - - 'http://'
+        - !GetAtt
+          - LoadBalancer
+          - DNSName
+    Description: WordPress Website
