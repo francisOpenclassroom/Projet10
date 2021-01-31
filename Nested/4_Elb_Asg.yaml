@@ -88,21 +88,21 @@ Resources:
     Type: "AWS::RDS::DBSubnetGroup"
 
 
-#  DatabaseInstance:
-#    Type: AWS::RDS::DBInstance
-#    Properties:
-#      DBName: !Ref DBName
-#      Engine: MySQL
-#      MasterUsername: !Ref MasterUserName
-#      MasterUserPassword: !Ref MasterPassword
-#      DBInstanceClass: db.t2.micro
-#      AllocatedStorage: '5'
-#      AvailabilityZone: eu-west-3a
-#      DBSubnetGroupName: !Ref myDBSubnetGroup
-#      VPCSecurityGroups:
-#        - !GetAtt
-#          - DBEC2SecurityGroup
-#          - GroupId
+  DatabaseInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBName: !Ref DBName
+      Engine: MySQL
+      MasterUsername: !Ref MasterUserName
+      MasterUserPassword: !Ref MasterPassword
+      DBInstanceClass: db.t2.micro
+      AllocatedStorage: '5'
+      AvailabilityZone: eu-west-3a
+      DBSubnetGroupName: !Ref myDBSubnetGroup
+      VPCSecurityGroups:
+        - !GetAtt
+          - DBEC2SecurityGroup
+          - GroupId
 
   NotificationTopic:
     Type: 'AWS::SNS::Topic'
@@ -162,10 +162,11 @@ Resources:
             #!/bin/bash
             yum update -y
             yum install -y httpd
-            echo "Le nom de l'instance est  : $(hostname -f)" > /var/www/html/index.html
+            echo "Démarrage de Worpress en cours sur : $(hostname -f)" > /var/www/html/index.html
             echo "DB_USER=${MasterUserName}" >> /home/ec2-user/.env
             echo "DB_PASSWORD=${MasterPassword}" >> /home/ec2-user/.env
             echo "DB_NAME=${DBName}" >> /home/ec2-user/.env
+            echo "DB_HOST=${DatabaseInstance.Endpoint.Address}" >> /home/ec2-user/.env
             echo "systemctl start httpd" >> /home/ec2-user/install
             systemctl start httpd
             echo "Copie des fichiers" >> /home/ec2-user/install
@@ -179,7 +180,7 @@ Resources:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       AutoScalingGroupName: ApplicationAsg
-      MinSize: '1'
+      MinSize: '2'
       MaxSize: '5'
       DesiredCapacity: '2'
       HealthCheckGracePeriod: 300
@@ -262,3 +263,4 @@ Outputs:
           - DNSName
     Description: WordPress Website
 
+ #aws cloudformation deploy --template-file 4_Elb_Asg.yaml --stack-name ELBASG --capabilities CAPABILITY_NAMED_IAM --parameter-overrides KeyName=tp-terraform DBName=wordpress  MasterUserName=wordpress MasterPassword=francis1965
