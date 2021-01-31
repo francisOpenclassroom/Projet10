@@ -1,0 +1,114 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: >-
+
+Parameters:
+
+  NetworkStackName:
+    Description: >-
+      Nom de la stack reseau
+    Type: String
+    MinLength: 1
+    MaxLength: 255
+    AllowedPattern: '^[a-zA-Z][-a-zA-Z0-9]*$'
+    Default: network
+
+  NATStackName:
+    Description: >-
+      Nom de la stack reseau
+    Type: String
+    MinLength: 1
+    MaxLength: 255
+    AllowedPattern: '^[a-zA-Z][-a-zA-Z0-9]*$'
+    Default: NAT
+
+  VPNAddress:
+    Type: String
+    Description: IP Address of your VPN device
+    MinLength: '7'
+    MaxLength: '15'
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})'
+    ConstraintDescription: must be a valid IP address of the form x.x.x.x
+
+
+Resources:
+
+  VPNGateway:
+    Type: 'AWS::EC2::VPNGateway'
+    Properties:
+      Type: ipsec.1
+      Tags:
+        - Key: Application
+          Value: !Ref 'AWS::StackName'
+
+  VPNRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !ImportValue
+        'Fn::Sub': '${NetworkStackName}-VPC'
+      Tags:
+        - Key: Name
+          Value: RT-VPN
+
+  VPNGatewayAttachment:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    Properties:
+      VpcId: !ImportValue
+        'Fn::Sub': '${NetworkStackName}-VPC'
+      VpnGatewayId: !Ref VPNGateway
+
+  VPNRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPNGatewayAttachment
+    Properties:
+      RouteTableId: !Ref VPNRouteTable
+      DestinationCidrBlock: 192.168.100.0/24
+      GatewayId: !Ref VPNGateway
+
+  PrivatetCSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !ImportValue
+        'Fn::Sub': '${NetworkStackName}-PrivateSubnetC'
+      RouteTableId: !Ref VPNRouteTable
+
+  CustomerGateway:
+    Type: 'AWS::EC2::CustomerGateway'
+    Properties:
+      Type: ipsec.1
+      BgpAsn: '65000'
+      IpAddress: !Ref VPNAddress
+      Tags:
+        - Key: Application
+          Value: !Ref 'AWS::StackName'
+        - Key: VPN
+          Value: !Join
+            - ''
+            - - 'Gateway to '
+              - !Ref VPNAddress
+
+  VPNConnection:
+    Type: 'AWS::EC2::VPNConnection'
+    Properties:
+      Type: ipsec.1
+      StaticRoutesOnly: 'true'
+      CustomerGatewayId: !Ref CustomerGateway
+      VpnGatewayId: !Ref VPNGateway
+
+  VPNConnectionRoute:
+    Type: 'AWS::EC2::VPNConnectionRoute'
+    Properties:
+      VpnConnectionId: !Ref VPNConnection
+      DestinationCidrBlock: 192.168.100.0/24
+
+
+Outputs:
+
+  VPNRouteTable:
+    Description: RT-VPN
+    Value: !Ref VPNRouteTable
+    Export:
+      Name: !Sub ${AWS::StackName}-VPN-RT
+
+
+# aws cloudformation deploy --template-file 6_VPN.yaml --stack-name VPN --parameter-overrides VPNAddress=x.x.x.x

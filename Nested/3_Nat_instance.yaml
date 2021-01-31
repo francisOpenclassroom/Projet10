@@ -119,6 +119,12 @@ Outputs:
     Export:
       Name: !Sub ${AWS::StackName}-IntProfil
 
+  NatInstance:
+    Description: Instance ID
+    Value: !Ref NATInstance
+    Export:
+      Name: !Sub ${AWS::StackName}-NATInstance
+
 
   PublicIp:
     Value:

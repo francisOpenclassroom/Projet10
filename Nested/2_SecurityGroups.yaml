@@ -1,6 +1,7 @@
 AWSTemplateFormatVersion: "2010-09-09"
 
 Description: >-
+  Groupes de securite
 
 Parameters:
 
@@ -34,15 +35,15 @@ Resources:
         - IpProtocol: tcp
           FromPort: '80'
           ToPort: '80'
-          CidrIp: !Ref SSHLocation
+          CidrIp: !Ref SSHLocation # a réduire au VPC
         - IpProtocol: tcp
           FromPort: '443'
           ToPort: '443'
-          CidrIp: !Ref SSHLocation
+          CidrIp: !Ref SSHLocation #à réduire au VPC
         - IpProtocol: tcp
           FromPort: '22'
           ToPort: '22'
-          CidrIp: !Ref SSHLocation
+          CidrIp: !Ref SSHLocation # a réduire mon adresse IP
       SecurityGroupEgress:
         - IpProtocol: tcp
           FromPort: '0'
@@ -67,6 +68,9 @@ Resources:
           CidrIp: 0.0.0.0/0
       VpcId: !ImportValue
         'Fn::Sub': '${NetworkStackName}-VPC'
+      Tags:
+        - Key: Name
+          Value: !Sub ELBSWS-SG-${AWS::StackName}
 
   WebServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -84,6 +88,8 @@ Resources:
             Ref: SSHLocation
       VpcId: !ImportValue
         'Fn::Sub': '${NetworkStackName}-VPC'
+
+
 
 Outputs:
 
