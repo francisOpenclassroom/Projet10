@@ -112,6 +112,14 @@ Resources:
 
 
 Outputs:
+
+  InstanceProfile:
+    Description: Profile d'instance
+    Value: !Ref InstanceProfile
+    Export:
+      Name: !Sub ${AWS::StackName}-IntProfil
+
+
   PublicIp:
     Value:
       Fn::GetAtt:
@@ -120,4 +128,4 @@ Outputs:
     Description: IP Public NAT
 
 
-
+# aws cloudformation deploy --template-file 3_Nat_instance.yaml --stack-name NAT --capabilities CAPABILITY_NAMED_IAM --parameter-overrides KeyName=tp-terraform
