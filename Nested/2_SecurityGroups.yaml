@@ -91,6 +91,22 @@ Resources:
 
 
 
+  EFSSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Enable NFS access from EC2
+      SecurityGroupIngress:
+        - FromPort: '2049'
+          IpProtocol: tcp
+          ToPort: '2049'
+          SourceSecurityGroupId: !GetAtt
+            - WebServerSecurityGroup
+            - GroupId
+      VpcId: !ImportValue
+        'Fn::Sub': '${NetworkStackName}-VPC'
+
+
+
 Outputs:
 
   NATSG:
@@ -110,6 +126,12 @@ Outputs:
     Value: !Ref WebServerSecurityGroup
     Export:
       Name: !Sub ${AWS::StackName}-WS-SG
+
+  EfsSG:
+    Description: EFS SG
+    Value: !Ref EFSSecurityGroup
+    Export:
+      Name: !Sub ${AWS::StackName}-EFS-SG
 
 
 # aws cloudformation  deploy --template-file 2_SecurityGroups.yaml --stack-name SG

@@ -111,6 +111,32 @@ Resources:
         - Endpoint: !Ref OperatorEMail
           Protocol: email
 
+  EFSFileSystem:
+    Type: 'AWS::EFS::FileSystem'
+    Properties:
+      PerformanceMode: generalPurpose
+
+  EFSMountTargetA:
+    Type: 'AWS::EFS::MountTarget'
+    Properties:
+      FileSystemId: !Ref EFSFileSystem
+      SecurityGroups:
+        - !ImportValue
+          'Fn::Sub': '${SGStackName}-EFS-SG'
+      SubnetId: !ImportValue
+        'Fn::Sub': '${NetworkStackName}-PublicSubnetA'
+
+  EFSMountTargetB:
+    Type: 'AWS::EFS::MountTarget'
+    Properties:
+      FileSystemId: !Ref EFSFileSystem
+      SecurityGroups:
+        - !ImportValue
+          'Fn::Sub': '${SGStackName}-EFS-SG'
+      SubnetId: !ImportValue
+        'Fn::Sub': '${NetworkStackName}-PublicSubnetB'
+
+
   LoadBalancer:
     Type: AWS::ElasticLoadBalancing::LoadBalancer
     Properties:
@@ -128,8 +154,8 @@ Resources:
         Target: HTTP:80/
         HealthyThreshold: '3'
         UnhealthyThreshold: '5'
-        Interval: '30'
-        Timeout: '5'
+        Interval: '60'
+        Timeout: '20'
       SecurityGroups:
         - !ImportValue
           'Fn::Sub': '${SGStackName}-ELBWS-SG'
@@ -162,11 +188,15 @@ Resources:
             #!/bin/bash
             yum update -y
             yum install -y httpd
+            yum install -y amazon-efs-utils
             echo "Démarrage de Worpress en cours sur : $(hostname -f)" > /var/www/html/index.html
             echo "DB_USER=${MasterUserName}" >> /home/ec2-user/.env
             echo "DB_PASSWORD=${MasterPassword}" >> /home/ec2-user/.env
             echo "DB_NAME=${DBName}" >> /home/ec2-user/.env
             echo "DB_HOST=${DatabaseInstance.Endpoint.Address}" >> /home/ec2-user/.env
+            echo "efs=${EFSFileSystem.FileSystemId}" >> /home/ec2-user/install
+            mkdir -p /home/ec2-user/efs
+            mount -t efs ${EFSFileSystem.FileSystemId}:/ /home/ec2-user/efs
             echo "systemctl start httpd" >> /home/ec2-user/install
             systemctl start httpd
             echo "Copie des fichiers" >> /home/ec2-user/install
@@ -175,6 +205,7 @@ Resources:
             echo "Debut PostInstall" >> /home/ec2-user/install
             sh /home/ec2-user/docker-run
 
+#            echo "DB_HOST=${DatabaseInstance.Endpoint.Address}" >> /home/ec2-user/install
 
   ApplicationAsg:
     Type: AWS::AutoScaling::AutoScalingGroup
@@ -262,5 +293,10 @@ Outputs:
           - LoadBalancer
           - DNSName
     Description: WordPress Website
+
+  EFSSystem:
+    Value: !Ref EFSFileSystem
+
+    Description: IP Public NAT
 
  #aws cloudformation deploy --template-file 4_Elb_Asg.yaml --stack-name ELBASG --capabilities CAPABILITY_NAMED_IAM --parameter-overrides KeyName=tp-terraform DBName=wordpress  MasterUserName=wordpress MasterPassword=francis1965
