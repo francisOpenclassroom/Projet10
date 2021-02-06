@@ -59,3 +59,4 @@ Resources:
         Timeout: PT5M
 
 
+# aws cloudformation deploy --template-file 5_intranet.yaml --stack-name intranet  --parameter-overrides KeyName=tp-terraform

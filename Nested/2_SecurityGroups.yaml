@@ -106,7 +106,6 @@ Resources:
         'Fn::Sub': '${NetworkStackName}-VPC'
 
 
-
 Outputs:
 
   NATSG:
