@@ -33,6 +33,7 @@ Parameters:
 
 Resources:
 
+ # -------- VPN -------- #
   VPNGateway:
     Type: 'AWS::EC2::VPNGateway'
     Properties:
@@ -41,6 +42,7 @@ Resources:
         - Key: Application
           Value: !Ref 'AWS::StackName'
 
+# -------- TABLE DE ROUTAGE -------- #
   VPNRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -57,6 +59,7 @@ Resources:
         'Fn::Sub': '${NetworkStackName}-VPC'
       VpnGatewayId: !Ref VPNGateway
 
+# -------- ROUTE VERS LE SUBNET DISTANT --------- #
   VPNRoute:
     Type: AWS::EC2::Route
     DependsOn: VPNGatewayAttachment
@@ -65,6 +68,7 @@ Resources:
       DestinationCidrBlock: 192.168.100.0/24
       GatewayId: !Ref VPNGateway
 
+# -------- ISOLATION DE L INSTANCE INTRANET -------- “
   PrivatetCSubnetRouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
@@ -101,7 +105,7 @@ Resources:
       VpnConnectionId: !Ref VPNConnection
       DestinationCidrBlock: 192.168.100.0/24
 
-
+# -------- EXPORTS -------- #
 Outputs:
 
   VPNRouteTable:

@@ -61,6 +61,7 @@ Parameters:
 
 Resources:
 
+# -------- Groupes de sécurité internes à la stack -------- #
   DBEC2SecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
@@ -87,7 +88,7 @@ Resources:
           Value: String
     Type: "AWS::RDS::DBSubnetGroup"
 
-
+# -------- INSTANCE BDD et REPLICA -------- #
   DatabaseInstance:
     Type: AWS::RDS::DBInstance
     Properties:
@@ -103,7 +104,18 @@ Resources:
         - !GetAtt
           - DBEC2SecurityGroup
           - GroupId
+  ReplicaDB:
+    DependsOn: DatabaseInstance
+    Type: 'AWS::RDS::DBInstance'
+    Properties:
+      SourceDBInstanceIdentifier: !Ref DatabaseInstance
+      DBInstanceClass: db.t2.micro
+      AvailabilityZone: eu-west-3b
+      Tags:
+        - Key: Name
+          Value: Read Replica BDD
 
+# -------- NOTIFICATIONS SNS -------- #
   NotificationTopic:
     Type: 'AWS::SNS::Topic'
     Properties:
@@ -111,6 +123,7 @@ Resources:
         - Endpoint: !Ref OperatorEMail
           Protocol: email
 
+# -------- EFS Et POINTS DE MONTAGE --------- #
   EFSFileSystem:
     Type: 'AWS::EFS::FileSystem'
     Properties:
@@ -136,7 +149,7 @@ Resources:
       SubnetId: !ImportValue
         'Fn::Sub': '${NetworkStackName}-PublicSubnetB'
 
-
+# --------- LOAD BALANCER -------- #
   LoadBalancer:
     Type: AWS::ElasticLoadBalancing::LoadBalancer
     Properties:
@@ -160,11 +173,13 @@ Resources:
         - !ImportValue
           'Fn::Sub': '${SGStackName}-ELBWS-SG'
 
+# -------- PROFILE D INSTANCE POUR LES INSTANCES PILOTEES PAR ASG --------- #
   WSInstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
       Roles: [ FullAccessS3 ]
 
+# -------- MODELE D INSTANCE PILOTE PAR ASG -------- #
   AsgLaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
@@ -205,8 +220,7 @@ Resources:
             echo "Debut PostInstall" >> /home/ec2-user/install
             sh /home/ec2-user/docker-run
 
-#            echo "DB_HOST=${DatabaseInstance.Endpoint.Address}" >> /home/ec2-user/install
-
+# -------- APLICATION ASG -------- #
   ApplicationAsg:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
@@ -233,6 +247,7 @@ Resources:
           - 'autoscaling:EC2_INSTANCE_TERMINATE'
           - 'autoscaling:EC2_INSTANCE_TERMINATE_ERROR'
 
+# -------- STRATEGIES DE MISE A L ECHELLE -------- #
   WebServerScaleUpPolicy:
     Type: 'AWS::AutoScaling::ScalingPolicy'
     Properties:
@@ -282,7 +297,7 @@ Resources:
         - Name: AutoScalingGroupName
           Value: !Ref ApplicationAsg
       ComparisonOperator: LessThanThreshold
-
+# --------- EXPORTS -------- #
 Outputs:
 
   WebsiteURL:

@@ -4,6 +4,7 @@ Description: >-
 
 
 Resources:
+# -------- VPC et SUBNETS --------#
   Vpc:
     Type: AWS::EC2::VPC
     Properties:
@@ -100,6 +101,7 @@ Resources:
         - Key: Name
           Value: PrivateSubnet2 3C
 
+# -------- ACCES INTERNET RESEAU PUBLIC -------- “
   InternetGateway:
     Type: AWS::EC2::InternetGateway
 
@@ -117,6 +119,7 @@ Resources:
         - Key: Name
           Value: RT Publique
 
+# -------- ROUTAGE --------#
   Route:
     Type: AWS::EC2::Route
     DependsOn: InternetGateway
@@ -143,38 +146,7 @@ Resources:
       SubnetId: !Ref PublicSubnet3
       RouteTableId: !Ref PublicRouteTable
 
-
-
-#  PublicRoute:
-#    Type: AWS::EC2::Route
-#    DependsOn: InternetGateway
-#    Properties:
-#      RouteTableId: !Ref PublicRouteTable
-#      DestinationCidrBlock: 0.0.0.0/0
-#      GatewayId: !Ref InternetGateway
-#
-#  SubnetARouteTableAssociation:
-#    Type: AWS::EC2::SubnetRouteTableAssociation
-#    Properties:
-#      SubnetId: !Ref PublicSubnetA
-#      RouteTableId: !Ref PublicRouteTable
-#
-#
-#  SubnetBRouteTableAssociation:
-#    Type: AWS::EC2::SubnetRouteTableAssociation
-#    Properties:
-#      SubnetId: !Ref PublicSubnetB
-#      RouteTableId: !Ref PublicRouteTable
-#
-#  SubnetCRouteTableAssociation:
-#    Type: AWS::EC2::SubnetRouteTableAssociation
-#    Properties:
-#      SubnetId: !Ref PublicSubnetC
-#      RouteTableId: !Ref PublicRouteTable
-#
-#
-#
-#
+# -------- EXPORTS --------- #
 Outputs:
 
   VPC:

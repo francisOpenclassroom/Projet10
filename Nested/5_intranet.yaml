@@ -28,6 +28,7 @@ Parameters:
     AllowedPattern: '^[a-zA-Z][-a-zA-Z0-9]*$'
     Default: SG
 
+# -------- INSTANCE EC2 INTRANET --------#
 Resources:
   InstanceIntranet:
     Type: AWS::EC2::Instance
@@ -53,6 +54,7 @@ Resources:
         - !ImportValue
           'Fn::Sub': '${SGStackName}-WS-SG'
 
+# -------- VERIFICATION de L INSTALLATION -------- #
     CreationPolicy:
       ResourceSignal:
         Count: 1

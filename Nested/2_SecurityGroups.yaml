@@ -24,6 +24,7 @@ Parameters:
     ConstraintDescription: Must be a valid IP CIDR range of the form x.x.x.x/x
 
 Resources:
+# --------- GROUPES DE SECURITE COMMUNS -------- #
   NATSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -106,6 +107,7 @@ Resources:
         'Fn::Sub': '${NetworkStackName}-VPC'
 
 
+# -------- EXPORTS -------- #
 Outputs:
 
   NATSG:
