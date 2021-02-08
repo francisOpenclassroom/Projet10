@@ -1,0 +1,134 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: >-
+
+Parameters:
+
+  NetworkStackName:
+    Description: >-
+      Nom de la stack reseau
+    Type: String
+    MinLength: 1
+    MaxLength: 255
+    AllowedPattern: '^[a-zA-Z][-a-zA-Z0-9]*$'
+    Default: network
+
+  SGStackName:
+    Description: >-
+      Nom de la stack reseau
+    Type: String
+    MinLength: 1
+    MaxLength: 255
+    AllowedPattern: '^[a-zA-Z][-a-zA-Z0-9]*$'
+    Default: SG
+
+  NATStackName:
+    Description: >-
+      Nom de la stack reseau
+    Type: String
+    MinLength: 1
+    MaxLength: 255
+    AllowedPattern: '^[a-zA-Z][-a-zA-Z0-9]*$'
+    Default: NAT
+
+  DBName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the bastion host
+    Type: String
+    ConstraintDescription: DBName
+
+  MasterUserName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the bastion host
+    Type: String
+    ConstraintDescription: DBUserName
+
+  MasterPassword:
+    Description: >-
+    Type: String
+
+
+
+
+
+
+
+Resources:
+
+  DBEC2SecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Open database for access
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '3306'
+          ToPort: '3306'
+          SourceSecurityGroupId: !ImportValue
+            'Fn::Sub': '${SGStackName}-WS-SG'
+      VpcId: !ImportValue
+        'Fn::Sub': '${NetworkStackName}-VPC'
+
+  myDBSubnetGroup:
+    Type: "AWS::RDS::DBSubnetGroup"
+    Properties:
+      DBSubnetGroupDescription: description
+      SubnetIds:
+        - !ImportValue
+          'Fn::Sub': '${NetworkStackName}-DatabaseSubnetA'
+        - !ImportValue
+          'Fn::Sub': '${NetworkStackName}-DatabaseSubnetB'
+      Tags:
+        - Key: String
+          Value: String
+
+  DatabaseInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBName: !Ref DBName
+      Engine: MySQL
+      MasterUsername: !Ref MasterUserName
+      MasterUserPassword: !Ref MasterPassword
+      DBInstanceClass: db.t2.micro
+      AllocatedStorage: '5'
+      AvailabilityZone: eu-west-3a
+      DBSubnetGroupName: !Ref myDBSubnetGroup
+      VPCSecurityGroups:
+        - !GetAtt
+          - DBEC2SecurityGroup
+          - GroupId
+
+
+  ReplicaDB:
+    DependsOn: DatabaseInstance
+    Type: 'AWS::RDS::DBInstance'
+    Properties:
+      SourceDBInstanceIdentifier: !Ref DatabaseInstance
+      DBInstanceClass: db.t2.micro
+      AvailabilityZone: eu-west-3b
+      Tags:
+        - Key: Name
+          Value: Read Replica BDD
+
+  DBEndpoint:
+    DependsOn: DatabaseInstance
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name : BDDEndpoint
+      Type : String
+      Value: !Join
+        - ''
+        - - !GetAtt
+            - DatabaseInstance
+            - Endpoint.Address
+
+
+
+
+Outputs:
+
+  EndpointDB:
+    Value: !Join
+      - ''
+      - - !GetAtt
+          - DatabaseInstance
+          - Endpoint.Address
+
+    Description: EndpointDB

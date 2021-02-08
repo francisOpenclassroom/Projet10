@@ -66,7 +66,7 @@ Resources:
       AvailabilityZone: eu-west-3b
       Tags:
         - Key: Name
-          Value: DatabaseSubnet1 3B
+          Value: DatabaseSubnet2 3B
 
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
@@ -99,7 +99,7 @@ Resources:
       AvailabilityZone: eu-west-3c
       Tags:
         - Key: Name
-          Value: PrivateSubnet2 3C
+          Value: PrivateSubnet3 3C
 
 # -------- ACCES INTERNET RESEAU PUBLIC -------- “
   InternetGateway:
@@ -145,6 +145,22 @@ Resources:
     Properties:
       SubnetId: !Ref PublicSubnet3
       RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetA:
+    DependsOn: PublicSubnet1
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: PublicSubetA
+      Type: String
+      Value: !Ref PublicSubnet1
+
+  PublicSubnetB:
+    DependsOn: PublicSubnet2
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: PublicSubetB
+      Type: String
+      Value: !Ref PublicSubnet2
 
 # -------- EXPORTS --------- #
 Outputs:

@@ -58,62 +58,22 @@ Parameters:
     Description: >-
     Type: String
 
+  BDDEndoint:
+    Description: BDD Endpoint
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: BDDEndpoint
+
+  PublicSunetA:
+    Description: PublicSubnetA
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: PublicSubetA
+
+  PublicSunetB:
+    Description: PublicSubnetB
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: PublicSubetB
 
 Resources:
-
-# -------- Groupes de sécurité internes à la stack -------- #
-  DBEC2SecurityGroup:
-    Type: 'AWS::EC2::SecurityGroup'
-    Properties:
-      GroupDescription: Open database for access
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: '3306'
-          ToPort: '3306'
-          SourceSecurityGroupId: !ImportValue
-            'Fn::Sub': '${SGStackName}-WS-SG'
-      VpcId: !ImportValue
-        'Fn::Sub': '${NetworkStackName}-VPC'
-
-  myDBSubnetGroup:
-    Properties:
-      DBSubnetGroupDescription: description
-      SubnetIds:
-        - !ImportValue
-          'Fn::Sub': '${NetworkStackName}-DatabaseSubnetA'
-        - !ImportValue
-          'Fn::Sub': '${NetworkStackName}-DatabaseSubnetB'
-      Tags:
-        - Key: String
-          Value: String
-    Type: "AWS::RDS::DBSubnetGroup"
-
-# -------- INSTANCE BDD et REPLICA -------- #
-  DatabaseInstance:
-    Type: AWS::RDS::DBInstance
-    Properties:
-      DBName: !Ref DBName
-      Engine: MySQL
-      MasterUsername: !Ref MasterUserName
-      MasterUserPassword: !Ref MasterPassword
-      DBInstanceClass: db.t2.micro
-      AllocatedStorage: '5'
-      AvailabilityZone: eu-west-3a
-      DBSubnetGroupName: !Ref myDBSubnetGroup
-      VPCSecurityGroups:
-        - !GetAtt
-          - DBEC2SecurityGroup
-          - GroupId
-  ReplicaDB:
-    DependsOn: DatabaseInstance
-    Type: 'AWS::RDS::DBInstance'
-    Properties:
-      SourceDBInstanceIdentifier: !Ref DatabaseInstance
-      DBInstanceClass: db.t2.micro
-      AvailabilityZone: eu-west-3b
-      Tags:
-        - Key: Name
-          Value: Read Replica BDD
 
 # -------- NOTIFICATIONS SNS -------- #
   NotificationTopic:
@@ -153,11 +113,12 @@ Resources:
   LoadBalancer:
     Type: AWS::ElasticLoadBalancing::LoadBalancer
     Properties:
+#      AvailabilityZones:
+#        - eu-west-3a
+#        - eu-west-3b
       Subnets:
-        - !ImportValue
-          'Fn::Sub': '${NetworkStackName}-PublicSubnetA'
-        - !ImportValue
-          'Fn::Sub': '${NetworkStackName}-PublicSubnetB'
+        - !Ref PublicSunetA
+        - !Ref PublicSunetB
       CrossZone: 'true'
       Listeners:
         - LoadBalancerPort: '80'
@@ -207,7 +168,7 @@ Resources:
             echo "DB_USER=${MasterUserName}" >> /home/ec2-user/.env
             echo "DB_PASSWORD=${MasterPassword}" >> /home/ec2-user/.env
             echo "DB_NAME=${DBName}" >> /home/ec2-user/.env
-            echo "DB_HOST=${DatabaseInstance.Endpoint.Address}" >> /home/ec2-user/.env
+            echo "DB_HOST=${BDDEndoint}" >> /home/ec2-user/.env
             echo "efs=${EFSFileSystem.FileSystemId}" >> /home/ec2-user/install
             mkdir -p /home/ec2-user/efs
             mount -t efs ${EFSFileSystem.FileSystemId}:/ /home/ec2-user/efs
@@ -221,7 +182,6 @@ Resources:
 # -------- APLICATION ASG -------- #
   ApplicationAsg:
     Type: AWS::AutoScaling::AutoScalingGroup
-    DependsOn: ReplicaDB
     Properties:
       AutoScalingGroupName: ApplicationAsg
       MinSize: '1'
@@ -312,5 +272,3 @@ Outputs:
     Value: !Ref EFSFileSystem
 
     Description: IP Public NAT
-
- #aws cloudformation deploy --template-file 4_Elb_Asg.yaml --stack-name ELBASG --capabilities CAPABILITY_NAMED_IAM --parameter-overrides KeyName=tp-terraform DBName=wordpress  MasterUserName=wordpress MasterPassword=francis1965
