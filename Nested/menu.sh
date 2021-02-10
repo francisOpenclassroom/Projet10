@@ -8,11 +8,12 @@ echo " 2) GROUPES DE SECURITE"
 echo " 3) INSTANCE NAT"
 echo " 4) BDD et REPLICA"
 echo " 5) ELB et ASSG"
-echo " 6) VPN"
+echo " 6) INTRANET"
+echo " 7) VPN"
 echo " 0) QUITTER"
-echo  "Entrez  1 2 3 4 5 ou  0 pour quitter"
+echo  "Entrez  1 2 3 4 5 6 7 ou  0 pour quitter"
 
-while read -p "1)RESEAUX - 2)SG - 3)NAT - 4)BDD BDDR - 5)ELB-ASG-WP - 6)VPN - 0)QUITTER  " choix
+while read -p "1)RESEAUX - 2)SG - 3)NAT - 4)BDD BDDR - 5)ELB-ASG-WP - 6)INTRANET 7)VPN - 0)QUITTER  " choix
 
 do
 
@@ -67,7 +68,22 @@ case $choix in
 
 ;;
 
-		6) echo "Annuler la configuration de la salle Baobab"
+		6) echo "Déploiement de l'instance  INTRANET"
+		   START_TIME=$SECONDS
+		   aws cloudformation deploy --template-file 5_intranet.yaml --stack-name intranet  --parameter-overrides KeyName=tp-terraform
+		   ELAPSED_TIME=$(($SECONDS - $START_TIME))
+		   echo "Stack intranet déployée en $ELAPSED_TIME secondes -> intranet"
+		   echo ""
+
+;;
+
+    7) echo "Déploiement du VPN"
+       START_TIME=$SECONDS
+		   aws cloudformation deploy --template-file 6_VPN.yaml --stack-name VPN --parameter-overrides VPNAddress=x.x.x.x
+		   ELAPSED_TIME=$(($SECONDS - $START_TIME))
+		   echo "Stack VPN déployée en $ELAPSED_TIME secondes -> VPN"
+		   echo ""
+
 
 
 ;;
