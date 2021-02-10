@@ -169,6 +169,7 @@ Resources:
             echo "DB_PASSWORD=${MasterPassword}" >> /home/ec2-user/.env
             echo "DB_NAME=${DBName}" >> /home/ec2-user/.env
             echo "DB_HOST=${BDDEndoint}" >> /home/ec2-user/.env
+            echo "ELB=${LoadBalancer.DNSName}" >> /home/ec2-user/elbdnsname
             echo "efs=${EFSFileSystem.FileSystemId}" >> /home/ec2-user/install
             mkdir -p /home/ec2-user/efs
             mount -t efs ${EFSFileSystem.FileSystemId}:/ /home/ec2-user/efs

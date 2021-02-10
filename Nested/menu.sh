@@ -6,13 +6,13 @@ echo
 echo " 1) RESEAUX"
 echo " 2) GROUPES DE SECURITE"
 echo " 3) INSTANCE NAT"
-echo " 4) ELB ASG WORDPRESS"
-echo " 5) INSTANCE INTRANET"
+echo " 4) BDD et REPLICA"
+echo " 5) ELB et ASSG"
 echo " 6) VPN"
 echo " 0) QUITTER"
 echo  "Entrez  1 2 3 4 5 ou  0 pour quitter"
 
-while read -p "1)RESEAUX - 2)SG - 3)NAT - 4)WORDPRESS - 5)INTRANET - 6)VPN - 0)QUITTER  " choix
+while read -p "1)RESEAUX - 2)SG - 3)NAT - 4)BDD BDDR - 5)ELB-ASG-WP - 6)VPN - 0)QUITTER  " choix
 
 do
 
@@ -47,21 +47,21 @@ case $choix in
 
 ;;
 
-		4) echo " Déploiement de Wordpress : "
+		4) echo " Déploiement des BDD: "
 		   START_TIME=$SECONDS
-		   aws cloudformation deploy --template-file 4_Elb_Asg.yaml --stack-name ELBASG --capabilities CAPABILITY_NAMED_IAM --parameter-overrides KeyName=tp-terraform DBName=wordpress  MasterUserName=wordpress MasterPassword=francis1965
+		   aws cloudformation deploy --template-file 3_1_databases.yaml --stack-name DB --parameter-overrides DBName=wordpress  MasterUserName=wordpress MasterPassword=francis1965
 		   ELAPSED_TIME=$(($SECONDS - $START_TIME))
-		   echo "Stack Wordpress déployée en $ELAPSED_TIME secondes -> ELBASG"
+		   echo "Stack base de données déployée en $ELAPSED_TIME secondes -> DB"
 		   echo ""
 
 
 ;;
 
-		5) echo "Déploiement de l'instance Intranet"
+		5) echo "Déploiement de WORDPRESS"
 		   START_TIME=$SECONDS
-		   aws cloudformation deploy --template-file 5_intranet.yaml --stack-name intranet  --parameter-overrides KeyName=tp-terraform
+		   aws cloudformation deploy --template-file 4_1_ASG_ELB.yaml --stack-name ELBASG --capabilities CAPABILITY_NAMED_IAM --parameter-overrides KeyName=tp-terraform DBName=wordpress  MasterUserName=wordpress MasterPassword=francis1965
 		   ELAPSED_TIME=$(($SECONDS - $START_TIME))
-		   echo "Stack intranet déployée en $ELAPSED_TIME secondes -> intranet"
+		   echo "Stack ELB ASG WORDPRESS déployée en $ELAPSED_TIME secondes -> ELBASG"
 		   echo ""
 
 
