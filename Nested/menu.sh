@@ -41,7 +41,7 @@ case $choix in
 
 		3) echo " Déploiement de l'instance NAT : "
 		   START_TIME=$SECONDS
-		   aws cloudformation deploy --template-file 3_Nat_instance.yaml --stack-name NAT --capabilities CAPABILITY_NAMED_IAM --parameter-overrides KeyName=tp-terraform
+		   aws cloudformation deploy --template-file NAT_UNIQUEMENT.yaml --stack-name NAT --capabilities CAPABILITY_NAMED_IAM --parameter-overrides KeyName=tp-terraform
 		   ELAPSED_TIME=$(($SECONDS - $START_TIME))
 		   echo "Stack Instance NAT déployée en $ELAPSED_TIME secondes -> NAT"
 		   echo ""

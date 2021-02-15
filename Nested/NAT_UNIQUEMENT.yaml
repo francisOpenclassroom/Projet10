@@ -40,7 +40,7 @@ Parameters:
   PSK:
     Type: String
     Description: La clé
-    Default: "'clesuperprivee'"
+    Default:
 
 Resources:
 
