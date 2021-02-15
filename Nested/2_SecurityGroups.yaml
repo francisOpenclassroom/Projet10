@@ -36,15 +36,25 @@ Resources:
         - IpProtocol: tcp
           FromPort: '80'
           ToPort: '80'
-          CidrIp: !Ref SSHLocation # a réduire au VPC
+          CidrIp: !ImportValue
+            'Fn::Sub': '${NetworkStackName}-VpcCidrBlock'
         - IpProtocol: tcp
           FromPort: '443'
           ToPort: '443'
-          CidrIp: !Ref SSHLocation #à réduire au VPC
+          CidrIp: !ImportValue
+            'Fn::Sub': '${NetworkStackName}-VpcCidrBlock'
         - IpProtocol: tcp
           FromPort: '22'
           ToPort: '22'
           CidrIp: !Ref SSHLocation # a réduire mon adresse IP
+        - IpProtocol: udp
+          FromPort: '4500'
+          ToPort: '4500'
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: udp
+          FromPort: '500'
+          ToPort: '500'
+          CidrIp: 0.0.0.0/0
       SecurityGroupEgress:
         - IpProtocol: tcp
           FromPort: '0'

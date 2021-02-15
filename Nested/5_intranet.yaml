@@ -53,12 +53,16 @@ Resources:
       SecurityGroupIds:
         - !ImportValue
           'Fn::Sub': '${SGStackName}-WS-SG'
+      Tags:
+        - Key: Name
+          Value: INTRANET
 
 # -------- VERIFICATION de L INSTALLATION -------- #
     CreationPolicy:
       ResourceSignal:
         Count: 1
         Timeout: PT5M
+
 
 
 # aws cloudformation deploy --template-file 5_intranet.yaml --stack-name intranet  --parameter-overrides KeyName=tp-terraform

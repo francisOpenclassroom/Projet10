@@ -161,7 +161,6 @@ Resources:
             #!/bin/bash
             yum update -y
             yum install -y amazon-efs-utils
-            echo "Démarrage de Worpress en cours sur : $(hostname -f)" > /var/www/html/index.html
             echo "DB_USER=${MasterUserName}" >> /home/ec2-user/.env
             echo "DB_PASSWORD=${MasterPassword}" >> /home/ec2-user/.env
             echo "DB_NAME=${DBName}" >> /home/ec2-user/.env

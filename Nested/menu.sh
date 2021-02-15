@@ -79,7 +79,7 @@ case $choix in
 
     7) echo "Déploiement du VPN"
        START_TIME=$SECONDS
-		   aws cloudformation deploy --template-file 6_VPN.yaml --stack-name VPN --parameter-overrides VPNAddress=x.x.x.x
+		   aws cloudformation deploy --template-file 6_VPN.yaml --stack-name VPN --parameter-overrides VPNAddress=89.159.94.43
 		   ELAPSED_TIME=$(($SECONDS - $START_TIME))
 		   echo "Stack VPN déployée en $ELAPSED_TIME secondes -> VPN"
 		   echo ""
