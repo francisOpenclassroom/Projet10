@@ -39,8 +39,8 @@ Parameters:
 
   PSK:
     Type: String
-    Description: La clé
-    Default:
+    Description: La clé doit être entourée de ' '
+    Default: "'clesuperprivee'"
 
 Resources:
 

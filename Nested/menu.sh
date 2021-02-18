@@ -5,7 +5,7 @@ echo "Déploiement des stacks :"
 echo
 echo " 1) RESEAUX"
 echo " 2) GROUPES DE SECURITE"
-echo " 3) INSTANCE NAT"
+echo " 3) INSTANCE VPN NAT"
 echo " 4) BDD et REPLICA"
 echo " 5) ELB et ASSG"
 echo " 6) INTRANET"
@@ -83,6 +83,8 @@ case $choix in
 		   ELAPSED_TIME=$(($SECONDS - $START_TIME))
 		   echo "Stack VPN déployée en $ELAPSED_TIME secondes -> VPN"
 		   echo ""
+
+
 
 
 
