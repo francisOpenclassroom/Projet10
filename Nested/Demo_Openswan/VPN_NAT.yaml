@@ -1,0 +1,115 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: >-
+  Instance NAT
+Parameters:
+
+  NetworkStackName:
+    Description: >-
+      Nom de la stack reseau
+    Type: String
+    MinLength: 1
+    MaxLength: 255
+    AllowedPattern: '^[a-zA-Z][-a-zA-Z0-9]*$'
+    Default: network
+
+  SGStackName:
+    Description: >-
+      Nom de la stack des groupes de securite
+    Type: String
+    MinLength: 1
+    MaxLength: 255
+    AllowedPattern: '^[a-zA-Z][-a-zA-Z0-9]*$'
+    Default: SG
+
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instances
+    Type: 'AWS::EC2::KeyPair::KeyName'
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+
+  OnSiteAddress:
+    Type: String
+    Description: IP Address of your VPN device
+    Default: 89.159.94.43
+
+  OnSiteSubnet:
+    Type: String
+    Description: IP Address of your VPN device
+    Default: 192.168.100.0/24
+
+  PSK:
+    Type: String
+    Description: La clé doit être entourée de ' '
+    Default: "'clesuperprivee'"
+
+Resources:
+
+# --------- PROFIL IAM -------- #
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles: [ FullAccessS3 ]
+
+  NatEip:
+    Type: AWS::EC2::EIP
+
+  NatEipAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      EIP: !Ref NatEip
+      InstanceId: !Ref NATInstance
+
+
+
+# -------- INSTANCE ROUTEUR NAT -------- #
+  NATInstance:
+    DependsOn: NatEip
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-00798d7180f25aac2
+      InstanceType: t2.micro
+      KeyName: !Ref KeyName
+      IamInstanceProfile: !Ref InstanceProfile
+      SubnetId: !ImportValue
+        'Fn::Sub': '${NetworkStackName}-PublicSubnetC'
+      PrivateIpAddress: 10.1.2.100
+      SecurityGroupIds:
+        - !ImportValue
+          'Fn::Sub': '${SGStackName}-NATSG'
+
+      SourceDestCheck: false  # Permet d'utiliser la fonction NAT dans une instance
+      Tags:
+        - Key: Name
+          Value: !Sub NAT-${AWS::StackName}
+      UserData: #  Installation de la fonction routeur dans l'instance Linux
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          echo "LEFT=10.1.2.100" >> /home/ec2-user/conf
+          echo "LEFTID=${NatEip}" >> /home/ec2-user/conf
+          echo "LEFTSUBNET=10.1.7.0/24" >> /home/ec2-user/conf
+          echo "RIGHT=${OnSiteAddress}" >> /home/ec2-user/conf
+          echo "RIGHTSUBNET=${OnSiteSubnet}" >> /home/ec2-user/conf
+          aws s3 cp s3://projet10/VPN/configuration.py /home/ec2-user/configuration.py
+          echo "PSK=${PSK}" >> /home/ec2-user/conf
+#          aws s3 cp s3://projet10/VPN/runvpn /home/ec2-user/runvpn
+#
+#          yum -y update
+#          yum install -y aws-cfn-bootstrap
+#          echo 1 > /proc/sys/net/ipv4/ip_forward
+#          echo 0 > /proc/sys/net/ipv4/conf/eth0/send_redirects
+#          /sbin/iptables -t nat -A POSTROUTING -o eth0 -s 0.0.0.0/0 -j MASQUERADE
+#          /sbin/iptables-save > /etc/sysconfig/iptables
+#          mkdir -p /etc/sysctl.d/
+#          cat << NatConfFileMarker > /etc/sysctl.d/nat.conf
+#          net.ipv4.ip_forward = 1
+#          net.ipv4.conf.eth0.send_redirects = 0
+#          NatConfFileMarker
+#          sh /home/ec2-user/runvpn
+#          /opt/aws/bin/cfn-signal -e 0 --resource NATInstance --stack ${AWS::StackName} --region ${AWS::Region}
+#    # L'installation est complete après la réception d'un signal dans un délai de 5 minutes, la ligne ci-dessus retourne le signal souhaité
+#    CreationPolicy:
+#      ResourceSignal:
+#        Count: 1
+#        Timeout: PT5M
+
+

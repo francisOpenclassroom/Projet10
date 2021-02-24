@@ -1,0 +1,101 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: >-
+
+
+Resources:
+# -------- VPC et SUBNETS --------#
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.1.0.0/16
+      EnableDnsHostnames: True
+      EnableDnsSupport: True
+      Tags:
+        - Key: Name
+          Value: VPC
+
+  PublicSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Select [ 2, !Cidr [ !GetAtt Vpc.CidrBlock, 12, 8 ] ]
+      MapPublicIpOnLaunch: True
+      AvailabilityZone: eu-west-3c
+      Tags:
+        - Key: Name
+          Value: PublicSubnet3 3C
+
+  PrivateSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Select [ 7, !Cidr [ !GetAtt Vpc.CidrBlock, 12, 8 ] ]
+      MapPublicIpOnLaunch: False
+      AvailabilityZone: eu-west-3c
+      Tags:
+        - Key: Name
+          Value: PrivateSubnet3 3C
+
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref Vpc
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: RT Publique
+
+  Route:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  SubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet3
+      RouteTableId: !Ref PublicRouteTable
+
+Outputs:
+
+  VPC:
+    Description: VPC
+    Value: !Ref Vpc
+    Export:
+      Name: !Sub ${AWS::StackName}-VPC
+
+
+  PublicSubnet3:
+    Description: Public Subnet AZ 3C
+    Value: !Ref PublicSubnet3
+    Export:
+      Name: !Sub ${AWS::StackName}-PublicSubnetC
+
+  PrivateSubnet3:
+    Description: Private Subnet AZ 3C
+    Value: !Ref PrivateSubnet3
+    Export:
+      Name: !Sub ${AWS::StackName}-PrivateSubnetC
+
+
+
+  VPCCidrBlock:
+    Description: Cidr du VPC
+    Value: !GetAtt Vpc.CidrBlock
+    Export:
+      Name: !Sub ${AWS::StackName}-VpcCidrBlock
+
+# aws cloudformation  deploy --template-file 1_reseau.yaml --stack-name network

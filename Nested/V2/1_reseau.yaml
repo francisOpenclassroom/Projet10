@@ -1,0 +1,241 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: >-
+
+
+Resources:
+# -------- VPC et SUBNETS --------#
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.1.0.0/16
+      EnableDnsHostnames: True
+      EnableDnsSupport: True
+      Tags:
+        - Key: Name
+          Value: VPC
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Select [ 0, !Cidr [ !GetAtt Vpc.CidrBlock, 12, 8 ] ]
+      MapPublicIpOnLaunch: True
+      AvailabilityZone: eu-west-3a
+      Tags:
+        - Key: Name
+          Value: PublicSubnet1 3A
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Select [ 1, !Cidr [ !GetAtt Vpc.CidrBlock, 12, 8 ] ]
+      MapPublicIpOnLaunch: True
+      AvailabilityZone: eu-west-3b
+      Tags:
+        - Key: Name
+          Value: PublicSubnet2 3B
+
+  PublicSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Select [ 2, !Cidr [ !GetAtt Vpc.CidrBlock, 12, 8 ] ]
+      MapPublicIpOnLaunch: True
+      AvailabilityZone: eu-west-3c
+      Tags:
+        - Key: Name
+          Value: PublicSubnet3 3C
+
+  DatabaseSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Select [ 3, !Cidr [ !GetAtt Vpc.CidrBlock, 12, 8 ] ]
+      AvailabilityZone: eu-west-3a
+      Tags:
+        - Key: Name
+          Value: DatabaseSubnet1 3A
+
+  DatabaseSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Select [ 4, !Cidr [ !GetAtt Vpc.CidrBlock, 12, 8 ] ]
+      AvailabilityZone: eu-west-3b
+      Tags:
+        - Key: Name
+          Value: DatabaseSubnet2 3B
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Select [ 5, !Cidr [ !GetAtt Vpc.CidrBlock, 12, 8 ] ]
+      MapPublicIpOnLaunch: False
+      AvailabilityZone: eu-west-3a
+      Tags:
+        - Key: Name
+          Value: PrivateSubnet1 3A
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Select [ 6, !Cidr [ !GetAtt Vpc.CidrBlock, 12, 8 ] ]
+      MapPublicIpOnLaunch: False
+      AvailabilityZone: eu-west-3b
+      Tags:
+        - Key: Name
+          Value: PrivateSubnet2 3B
+
+  PrivateSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Select [ 7, !Cidr [ !GetAtt Vpc.CidrBlock, 12, 8 ] ]
+      MapPublicIpOnLaunch: False
+      AvailabilityZone: eu-west-3c
+      Tags:
+        - Key: Name
+          Value: PrivateSubnet3 3C
+
+# -------- ACCES INTERNET RESEAU PUBLIC -------- “
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref Vpc
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: RT Publique
+
+# -------- ROUTAGE --------#
+  Route:
+    Type: AWS::EC2::Route
+    DependsOn: InternetGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  SubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  SubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  SubnetRouteTableAssociation3:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet3
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetA:
+    DependsOn: PublicSubnet1
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: PublicSubetA
+      Type: String
+      Value: !Ref PublicSubnet1
+
+  PublicSubnetB:
+    DependsOn: PublicSubnet2
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: PublicSubetB
+      Type: String
+      Value: !Ref PublicSubnet2
+
+# -------- EXPORTS --------- #
+Outputs:
+
+  VPC:
+    Description: VPC
+    Value: !Ref Vpc
+    Export:
+      Name: !Sub ${AWS::StackName}-VPC
+
+  PublicRT:
+    Description: Table de routage
+    Value: !Ref PublicRouteTable
+    Export:
+      Name: !Sub ${AWS::StackName}-PublicRT
+
+  VPCCidrBlock:
+    Description: Cidr du VPC
+    Value: !GetAtt Vpc.CidrBlock
+    Export:
+      Name: !Sub ${AWS::StackName}-VpcCidrBlock
+
+  PublicSubnet1:
+    Description: Public Subnet AZ 3A
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub ${AWS::StackName}-PublicSubnetA
+
+  PublicSubnet2:
+    Description: Public Subnet AZ 3B
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: !Sub ${AWS::StackName}-PublicSubnetB
+
+  PublicSubnet3:
+    Description: Public Subnet AZ 3C
+    Value: !Ref PublicSubnet3
+    Export:
+      Name: !Sub ${AWS::StackName}-PublicSubnetC
+
+  DatabaseSubnet1:
+    Description: Database Subnet 3A
+    Value: !Ref DatabaseSubnet1
+    Export:
+      Name: !Sub ${AWS::StackName}-DatabaseSubnetA
+
+  DatabaseSubnet2:
+    Description: Database Subnet 3B
+    Value: !Ref DatabaseSubnet2
+    Export:
+      Name: !Sub ${AWS::StackName}-DatabaseSubnetB
+
+  PrivateSubnet1:
+    Description: Private Subnet AZ 3A
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub ${AWS::StackName}-PrivateSubnetA
+
+  PrivateSubnet2:
+    Description: Private Subnet AZ 3B
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub ${AWS::StackName}-PrivateSubnetB
+
+  PrivateSubnet3:
+    Description: Private Subnet AZ 3C
+    Value: !Ref PrivateSubnet3
+    Export:
+      Name: !Sub ${AWS::StackName}-PrivateSubnetC
+
+
+  InternetGateway:
+    Description: Passerelle Internet
+    Value: !Ref InternetGateway
+    Export:
+      Name: !Sub ${AWS::StackName}-IGW
+
+# aws cloudformation  deploy --template-file 1_reseau.yaml --stack-name network
