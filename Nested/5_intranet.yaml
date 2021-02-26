@@ -33,16 +33,16 @@ Resources:
   InstanceIntranet:
     Type: AWS::EC2::Instance
     Properties:
-      UserData:
-        Fn::Base64: !Sub |
+      #UserData:
+       # Fn::Base64: !Sub |
           #!/bin/bash
-          sudo yum -y update
-          sudo amazon-linux-extras install docker
-          sudo service docker start
-          sudo systemctl enable docker
-          sudo usermod -a -G docker ec2-user
-          sudo docker run -tid --restart always -p 80:80 --name web gerbildock/intranet:V1.1
-          /opt/aws/bin/cfn-signal -e 0 --resource InstanceIntranet --stack ${AWS::StackName} --region ${AWS::Region}
+        #  sudo yum -y update
+         # sudo amazon-linux-extras install docker
+          #sudo service docker start
+          #sudo systemctl enable docker
+          #sudo usermod -a -G docker ec2-user
+          #sudo docker run -tid --restart always -p 80:80 --name web gerbildock/intranet:V1.1
+          #/opt/aws/bin/cfn-signal -e 0 --resource InstanceIntranet --stack ${AWS::StackName} --region ${AWS::Region}
 
       InstanceType: t2.micro
       ImageId: ami-00798d7180f25aac2
@@ -58,10 +58,10 @@ Resources:
           Value: INTRANET
 
 # -------- VERIFICATION de L INSTALLATION -------- #
-    CreationPolicy:
-      ResourceSignal:
-        Count: 1
-        Timeout: PT5M
+    #CreationPolicy:
+     # ResourceSignal:
+      #  Count: 1
+       # Timeout: PT5M
 
 
 

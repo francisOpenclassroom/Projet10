@@ -69,6 +69,8 @@ Resources:
       SubnetId: !Ref PublicSubnet3
       RouteTableId: !Ref PublicRouteTable
 
+
+
 Outputs:
 
   VPC:
