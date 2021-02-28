@@ -1,0 +1,102 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: >-
+  Groupes de securite
+
+Parameters:
+
+  NetworkStackName:
+    Description: >-
+      Nom de la stack reseau
+    Type: String
+    MinLength: 1
+    MaxLength: 255
+    AllowedPattern: '^[a-zA-Z][-a-zA-Z0-9]*$'
+    Default: network
+
+  SSHLocation:
+    Description: The IP address range that can be used to SSH to the EC2 instances
+    Type: String
+    MinLength: '9'
+    MaxLength: '18'
+    Default: 0.0.0.0/0
+    AllowedPattern: "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})"
+    ConstraintDescription: Must be a valid IP CIDR range of the form x.x.x.x/x
+
+Resources:
+# --------- GROUPES DE SECURITE COMMUNS -------- #
+
+
+  ELBWebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable HTTP access via port 80
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: 0.0.0.0/0
+      VpcId: !ImportValue
+        'Fn::Sub': '${NetworkStackName}-VPC'
+      Tags:
+        - Key: Name
+          Value: !Sub ELBSWS-SG-${AWS::StackName}
+
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable HTTP access via port 80
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp:
+            Ref: SSHLocation
+      VpcId: !ImportValue
+        'Fn::Sub': '${NetworkStackName}-VPC'
+
+
+  EFSSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: Enable NFS access from EC2
+      SecurityGroupIngress:
+        - FromPort: '2049'
+          IpProtocol: tcp
+          ToPort: '2049'
+          SourceSecurityGroupId: !GetAtt
+            - WebServerSecurityGroup
+            - GroupId
+      VpcId: !ImportValue
+        'Fn::Sub': '${NetworkStackName}-VPC'
+
+
+# -------- EXPORTS -------- #
+Outputs:
+
+
+  ELBWebserverSG:
+    Description: ELB Webserver SG
+    Value: !Ref ELBWebServerSecurityGroup
+    Export:
+      Name: !Sub ${AWS::StackName}-ELBWS-SG
+
+  WebserverSG:
+    Description: Webserver SG
+    Value: !Ref WebServerSecurityGroup
+    Export:
+      Name: !Sub ${AWS::StackName}-WS-SG
+
+
+  EfsSG:
+    Description: EFS SG
+    Value: !Ref EFSSecurityGroup
+    Export:
+      Name: !Sub ${AWS::StackName}-EFS-SG
+
+
+# aws cloudformation  deploy --template-file 2_SecurityGroups.yaml --stack-name SG

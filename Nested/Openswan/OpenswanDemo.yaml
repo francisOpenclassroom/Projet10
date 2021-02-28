@@ -141,6 +141,10 @@ Resources:
           ToPort: '443'
           CidrIp: !GetAtt Vpc.CidrBlock
         - IpProtocol: tcp
+          FromPort: '2049'
+          ToPort: '2049'
+          CidrIp: !GetAtt Vpc.CidrBlock
+        - IpProtocol: tcp
           FromPort: '22'
           ToPort: '22'
           CidrIp: 0.0.0.0/0
@@ -197,6 +201,9 @@ Resources:
             leftnexthop=%defaultroute
             right=${OnSiteAddress}
             rightsubnet=${OnSiteSubnet}
+            ike=aes256-sha1;modp1024
+            phase2=esp
+            phase2alg=aes256-sha1;modp1024
           VPNConfFileMarker
           cat << SecretFileMarker > /etc/ipsec.d/projet10.secrets
           ${NatEip} ${OnSiteAddress} : PSK ${PSK}
@@ -228,7 +235,23 @@ Resources:
 
   InstanceIntranet:
     Type: AWS::EC2::Instance
+    DependsOn:
+      - NATInstance
+      - NatEip
     Properties:
+      UserData: #  Installation de la fonction routeur - VPN dans l'instance Linux
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum -y update
+          amazon-linux-extras install docker -y
+          service docker start
+          systemctl enable docker
+          usermod -a -G docker ec2-user
+          curl -L https://github.com/docker/compose/releases/download/1.21.0/docker-compose-`uname -s`-`uname -m` | sudo tee /usr/local/bin/docker-compose > /dev/null
+          chmod +x /usr/local/bin/docker-compose
+          ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
+          mkdir /home/ec2-user/share
+          mount -v -o vers=4,loud 192.168.100.10:/ /home/ec2-user/share
       InstanceType: t2.micro
       ImageId: ami-00798d7180f25aac2
       KeyName: !Ref KeyName
@@ -261,7 +284,11 @@ Outputs:
     Export:
       Name: !Sub ${AWS::StackName}-PrivateSubnetC
 
-
+  EIP:
+    Description: Adresse Public Instance NAT VPN
+    Value: !Ref NatEip
+    Export:
+      Name: !Sub ${AWS::StackName}-EIP
 
   VPCCidrBlock:
     Description: Cidr du VPC

@@ -1,0 +1,271 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: >-
+
+Parameters:
+
+  OperatorEMail:
+    Description: EMail address to notify if there are any scaling operations
+    Type: String
+    AllowedPattern: >-
+      ([a-zA-Z0-9_\-\.]+)@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.)|(([a-zA-Z0-9\-]+\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\]?)
+    ConstraintDescription: must be a valid email address.
+    Default: francis.rouillon.openclassrooms@gmail.com
+
+  NetworkStackName:
+    Description: >-
+      Nom de la stack reseau
+    Type: String
+    MinLength: 1
+    MaxLength: 255
+    AllowedPattern: '^[a-zA-Z][-a-zA-Z0-9]*$'
+    Default: network
+
+  SGStackName:
+    Description: >-
+      Nom de la stack reseau
+    Type: String
+    MinLength: 1
+    MaxLength: 255
+    AllowedPattern: '^[a-zA-Z][-a-zA-Z0-9]*$'
+    Default: SG
+
+  NATStackName:
+    Description: >-
+      Nom de la stack reseau
+    Type: String
+    MinLength: 1
+    MaxLength: 255
+    AllowedPattern: '^[a-zA-Z][-a-zA-Z0-9]*$'
+    Default: NAT
+
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instances
+    Type: 'AWS::EC2::KeyPair::KeyName'
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+
+  DBName:
+    Description: Nom des clés
+    Type: String
+    ConstraintDescription: DBName
+
+  MasterUserName:
+    Description: Utilisateur BDD
+    Type: String
+    ConstraintDescription: DBUserName
+
+  MasterPassword:
+    Description: Psswd de la BDD
+    Type: String
+
+  BDDEndoint:
+    Description: SSM BDD Endpoint
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: BDDEndpoint
+
+  PublicSunetA:
+    Description: SSM PublicSubnetA
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: PublicSubetA
+
+  PublicSunetB:
+    Description: SSM PublicSubnetB
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: PublicSubetB
+
+Resources:
+
+# -------- NOTIFICATIONS SNS -------- #
+  NotificationTopic:
+    Type: 'AWS::SNS::Topic'
+    Properties:
+      Subscription:
+        - Endpoint: !Ref OperatorEMail
+          Protocol: email
+
+# -------- EFS Et POINTS DE MONTAGE --------- #
+  EFSFileSystem:
+    Type: 'AWS::EFS::FileSystem'
+    Properties:
+      PerformanceMode: generalPurpose
+
+  EFSMountTargetA:
+    Type: 'AWS::EFS::MountTarget'
+    Properties:
+      FileSystemId: !Ref EFSFileSystem
+      SecurityGroups:
+        - !ImportValue
+          'Fn::Sub': '${SGStackName}-EFS-SG'
+      SubnetId: !ImportValue
+        'Fn::Sub': '${NetworkStackName}-PublicSubnetA'
+
+  EFSMountTargetB:
+    Type: 'AWS::EFS::MountTarget'
+    Properties:
+      FileSystemId: !Ref EFSFileSystem
+      SecurityGroups:
+        - !ImportValue
+          'Fn::Sub': '${SGStackName}-EFS-SG'
+      SubnetId: !ImportValue
+        'Fn::Sub': '${NetworkStackName}-PublicSubnetB'
+
+# --------- LOAD BALANCER -------- #
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancing::LoadBalancer
+    Properties:
+      Subnets:
+        - !Ref PublicSunetA
+        - !Ref PublicSunetB
+      CrossZone: 'true'
+      Listeners:
+        - LoadBalancerPort: '80'
+          InstancePort: '80'
+          Protocol: HTTP
+      HealthCheck:
+        Target: HTTP:80/
+        HealthyThreshold: '3'
+        UnhealthyThreshold: '5'
+        Interval: '60'
+        Timeout: '20'
+      SecurityGroups:
+        - !ImportValue
+          'Fn::Sub': '${SGStackName}-ELBWS-SG'
+
+# -------- PROFILE D INSTANCE POUR LES INSTANCES PILOTEES PAR ASG --------- #
+  WSInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles: [ FullAccessS3 ]
+
+# -------- MODELE D INSTANCE PILOTE PAR ASG -------- #
+  AsgLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: !Sub ${AWS::StackName}-launch-template
+
+      LaunchTemplateData:
+        CreditSpecification:
+          CpuCredits: Unlimited
+        ImageId: ami-00798d7180f25aac2
+        InstanceType: t2.micro
+        IamInstanceProfile:
+          Arn: !GetAtt WSInstanceProfile.Arn
+        KeyName: !Ref KeyName
+        Monitoring:
+          Enabled: True
+        SecurityGroupIds:
+          - !ImportValue
+            'Fn::Sub': '${SGStackName}-WS-SG'
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            yum update -y
+            yum install -y amazon-efs-utils
+            echo "DB_USER=${MasterUserName}" >> /home/ec2-user/.env
+            echo "DB_PASSWORD=${MasterPassword}" >> /home/ec2-user/.env
+            echo "DB_NAME=${DBName}" >> /home/ec2-user/.env
+            echo "DB_HOST=${BDDEndoint}" >> /home/ec2-user/.env
+            echo "ELB=${LoadBalancer.DNSName}" >> /home/ec2-user/elbdnsname
+            echo "efs=${EFSFileSystem.FileSystemId}" >> /home/ec2-user/install
+            mkdir -p /home/ec2-user/efs
+            mount -t efs ${EFSFileSystem.FileSystemId}:/ /home/ec2-user/efs
+            echo "systemctl start httpd" >> /home/ec2-user/install
+            echo "Copie des fichiers" >> /home/ec2-user/install
+            aws s3 cp s3://projet10/docker-compose.yml /home/ec2-user/docker-compose.yml
+            aws s3 cp s3://projet10/docker-run /home/ec2-user/docker-run
+            echo "Debut PostInstall" >> /home/ec2-user/install
+            sh /home/ec2-user/docker-run
+
+# -------- APLICATION ASG -------- #
+  ApplicationAsg:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: ApplicationAsg
+      MinSize: '2'
+      MaxSize: '5'
+      DesiredCapacity: '2'
+      HealthCheckGracePeriod: 300
+      LaunchTemplate:
+        LaunchTemplateId: !Ref AsgLaunchTemplate
+        Version: !GetAtt AsgLaunchTemplate.LatestVersionNumber
+      VPCZoneIdentifier:
+        - !ImportValue
+          'Fn::Sub': '${NetworkStackName}-PrivateSubnetA'
+        - !ImportValue
+          'Fn::Sub': '${NetworkStackName}-PrivateSubnetB'
+      LoadBalancerNames:
+        - !Ref LoadBalancer
+      NotificationConfiguration:
+        TopicARN: !Ref NotificationTopic
+        NotificationTypes:
+          - 'autoscaling:EC2_INSTANCE_LAUNCH'
+          - 'autoscaling:EC2_INSTANCE_LAUNCH_ERROR'
+          - 'autoscaling:EC2_INSTANCE_TERMINATE'
+          - 'autoscaling:EC2_INSTANCE_TERMINATE_ERROR'
+
+# -------- STRATEGIES DE MISE A L ECHELLE -------- #
+  WebServerScaleUpPolicy:
+    Type: 'AWS::AutoScaling::ScalingPolicy'
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref ApplicationAsg
+      Cooldown: '60'
+      ScalingAdjustment: '1'
+
+  WebServerScaleDownPolicy:
+    Type: 'AWS::AutoScaling::ScalingPolicy'
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref ApplicationAsg
+      Cooldown: '60'
+      ScalingAdjustment: '-1'
+
+  CPUAlarmHigh:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmDescription: Scale-up if CPU > 80% for 5 minutes
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: '300'
+      EvaluationPeriods: '1'
+      Threshold: '80'
+      AlarmActions:
+        - !Ref WebServerScaleUpPolicy
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref ApplicationAsg
+      ComparisonOperator: GreaterThanThreshold
+
+  CPUAlarmLow:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmDescription: Scale-down if CPU < 70% for 5 minutes
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: '300'
+      EvaluationPeriods: '1'
+      Threshold: '70'
+      AlarmActions:
+        - !Ref WebServerScaleDownPolicy
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref ApplicationAsg
+      ComparisonOperator: LessThanThreshold
+# --------- EXPORTS -------- #
+Outputs:
+
+  WebsiteURL:
+    Value: !Join
+      - ''
+      - - 'http://'
+        - !GetAtt
+          - LoadBalancer
+          - DNSName
+    Description: WordPress Website
+
+  EFSSystem:
+    Value: !Ref EFSFileSystem
+
+    Description: IP Public NAT

@@ -1,0 +1,67 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description:
+  Instance Intranet
+
+Parameters:
+
+  NetworkStackName:
+    Description: >-
+      Nom de la stack reseau
+    Type: String
+    MinLength: 1
+    MaxLength: 255
+    AllowedPattern: '^[a-zA-Z][-a-zA-Z0-9]*$'
+    Default: network
+
+  VpcCidr:
+    Description: SSM VPCCidrBlock
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: VPCCidr
+
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instances
+    Type: 'AWS::EC2::KeyPair::KeyName'
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+    Default: tp-terraform
+
+Resources:
+  IntranetSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable HTTP access via port 80
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: !Ref VpcCidr
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: !Ref VpcCidr
+      VpcId: !ImportValue
+        'Fn::Sub': '${NetworkStackName}-VPC'
+      Tags:
+        - Key: Name
+          Value: !Sub INTRA-SG-${AWS::StackName}
+
+
+  InstanceIntranet:
+    Type: AWS::EC2::Instance
+    Properties:
+      UserData: #  Installation de la fonction routeur - VPN dans l'instance Linux
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          mkdir /home/ec2-user/share
+          mount -v -o vers=4,loud 192.168.100.10:/ /home/ec2-user/share
+      InstanceType: t2.micro
+      ImageId: ami-00798d7180f25aac2
+      KeyName: !Ref KeyName
+      SubnetId: !ImportValue
+        'Fn::Sub': '${NetworkStackName}-PrivateSubnetC'
+      PrivateIpAddress: 10.1.7.10
+      SecurityGroupIds:
+        - !Ref IntranetSecurityGroup
+      Tags:
+        - Key: Name
+          Value: INTRANET
