@@ -54,6 +54,13 @@ Resources:
           #!/bin/bash
           mkdir /home/ec2-user/share
           mount -v -o vers=4,loud 192.168.100.10:/ /home/ec2-user/share
+          amazon-linux-extras install docker -y
+          service docker start
+          systemctl enable docker
+          docker run \
+              -v /home/ec2-user/share:/srv \
+              -dp 80:80 \
+              gerbildock/fbfr:v1.0
       InstanceType: t2.micro
       ImageId: ami-00798d7180f25aac2
       KeyName: !Ref KeyName
