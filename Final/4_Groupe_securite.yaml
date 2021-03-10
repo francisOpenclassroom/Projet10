@@ -15,7 +15,7 @@ Parameters:
     Default: network
 
   SSHLocation:
-    Description: The IP address range that can be used to SSH to the EC2 instances
+    Description: Acces SSH
     Type: String
     MinLength: '9'
     MaxLength: '18'
@@ -30,7 +30,7 @@ Resources:
   ELBWebServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Enable HTTP access via port 80
+      GroupDescription:  HTTP  via port 80
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: '80'
@@ -45,7 +45,7 @@ Resources:
   WebServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Enable HTTP access via port 80
+      GroupDescription: HTTP via port 80
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: '80'
@@ -63,7 +63,7 @@ Resources:
   EFSSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
-      GroupDescription: Enable NFS access from EC2
+      GroupDescription:  NFS access EC2
       SecurityGroupIngress:
         - FromPort: '2049'
           IpProtocol: tcp

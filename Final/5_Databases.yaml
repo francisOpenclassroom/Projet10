@@ -32,12 +32,12 @@ Parameters:
     Default: NAT
 
   DBName:
-    Description: Name of an existing EC2 KeyPair to enable SSH access to the bastion host
+    Description: Nom de la BDD
     Type: String
     ConstraintDescription: DBName
 
   MasterUserName:
-    Description: Name of an existing EC2 KeyPair to enable SSH access to the bastion host
+    Description: BDD USER
     Type: String
     ConstraintDescription: DBUserName
 
@@ -56,7 +56,7 @@ Resources:
   DBEC2SecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
-      GroupDescription: Open database for access
+      GroupDescription: acces BDD
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: '3306'

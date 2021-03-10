@@ -12,12 +12,12 @@ Parameters:
 
   OnSiteSubnet:
     Type: String
-    Description: IP Address of your VPN device
+    Description: Sous réseau sur le site local
     Default: 192.168.100.0/24
 
   OnSiteAddress:
     Type: String
-    Description: IP Address of your VPN device
+    Description: Adresse IP Publique du site local
     Default: 89.159.94.43
 
   PSK:
